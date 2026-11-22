@@ -14,10 +14,14 @@ def payload():
     return (content.encode() if isinstance(content,str) else load(sample)),data.get('parameters',{})
 
 def api(stage):
-    content,parameters=payload();return jsonify(run(content,parameters,stage))
+    content,parameters=payload();state=run(content,parameters,stage)
+    if stage>=5:state['work_orders']=store.list_work_orders()
+    return jsonify(state)
 
-def page(stage,template):
+def page(stage,template,extra=None):
     latest=store.history();state=store.get(latest[0]['id']) if latest else run(load('dirty.csv'),{})
     source=load(request.args['sample']) if 'sample' in request.args else base64.b64decode(state['source_b64']) if state.get('source_b64') else load('dirty.csv')
     data=run(source,state.get('manifest',{}).get('parameters',{}),stage)
-    return render_template(template,title=TITLE,short=SHORT,modules=MODULES,current=stage,data=data,run=state,history=latest)
+    context=dict(title=TITLE,short=SHORT,modules=MODULES,current=stage,data=data,run=state,history=latest)
+    if extra:context.update(extra)
+    return render_template(template,**context)

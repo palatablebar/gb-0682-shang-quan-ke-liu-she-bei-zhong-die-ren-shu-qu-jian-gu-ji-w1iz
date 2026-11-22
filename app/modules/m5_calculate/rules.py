@@ -14,13 +14,23 @@ def bounds(model):
     return base+low,base+high,low,high
 
 def apply(state):
-    results=[];bad=set()
+    results=[];bad=set();issues=state.get('bucket_issues',[])
     for i,item in enumerate(state['models']):
         try:
             low,high,tlo,thi=bounds(item['model']);results.append({'id':item['bucket'],'line':item['line'],'lower':low,'upper':high,'width':high-low,'triple_lower':tlo,'triple_upper':thi,'code':'EXACT' if low==high else 'INTERVAL'})
         except DomainError as e:
             bad.add(item['bucket'])
+            evidence=[]
             for r in state['rows']:
-                if r['bucket']==item['bucket']:state['quarantine'].append({'line':r['_line'],'id':r['id'],'code':e.code,'raw':r['_raw']})
+                if r['bucket']==item['bucket']:
+                    state['quarantine'].append({'line':r['_line'],'id':r['id'],'code':e.code,'raw':r['_raw']})
+                    evidence.append({'line':r['_line'],'id':r['id'],'kind':r['kind'],'left':r['left'],
+                        'right':r.get('right',''),'count':r['count'],'unit':r['unit']})
+            devices=sorted({r['id'] for r in state['rows'] if r['bucket']==item['bucket']})
+            issues.append({'bucket':item['bucket'],'stage':'m5_calculate','code':e.code,'reason':e.message,
+                'devices':devices,'evidence':evidence,'line':item['line'],
+                'model':{'zones':item['model']['zones'],'pairs':item['model']['pairs'],
+                         'triple':item['model'].get('triple')}})
     state['rows']=[r for r in state['rows'] if r['bucket'] not in bad]
+    state['bucket_issues']=issues
     state['calculations']=results;state['business']={'total':sum(r['lower'] for r in results),'upper_total':sum(r['upper'] for r in results),'buckets':len(results),'unit':'客次'};return state

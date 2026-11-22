@@ -18,12 +18,20 @@ def model(observations):
 def apply(state):
     grouped=defaultdict(list)
     for r in state['observations']:grouped[r['bucket']].append(r)
-    result=[];bad_buckets=set()
+    result=[];bad_buckets=set();issues=[]
     for bucket,rows in sorted(grouped.items()):
         try:
             result.append({'bucket':bucket,'model':model(rows),'line':min(r['_line'] for r in rows)})
         except DomainError as e:
             bad_buckets.add(bucket)
+            evidence=[]
             for r in state['rows']:
-                if r['bucket']==bucket:state['quarantine'].append({'line':r['_line'],'id':r['id'],'code':e.code,'raw':r['_raw']})
-    state['rows']=[r for r in state['rows'] if r['bucket'] not in bad_buckets];state['models']=result;return state
+                if r['bucket']==bucket:
+                    state['quarantine'].append({'line':r['_line'],'id':r['id'],'code':e.code,'raw':r['_raw']})
+                    evidence.append({'line':r['_line'],'id':r['id'],'kind':r['kind'],'left':r['left'],
+                        'right':r.get('right',''),'count':r['count'],'unit':r['unit']})
+            devices=sorted({r['id'] for r in rows})
+            issues.append({'bucket':bucket,'stage':'m4_segments','code':e.code,'reason':e.message,
+                'devices':devices,'evidence':evidence,'line':min(r['_line'] for r in rows)})
+    state['rows']=[r for r in state['rows'] if r['bucket'] not in bad_buckets]
+    state['models']=result;state['bucket_issues']=issues;return state

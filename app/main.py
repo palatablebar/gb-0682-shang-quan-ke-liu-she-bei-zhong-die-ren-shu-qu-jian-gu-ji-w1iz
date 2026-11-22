@@ -35,6 +35,15 @@ def create_app():
         state=store.get(run_id)
         if not state.get('reconcile',{}).get('balanced'):raise DomainError('UNBALANCED','对账未平')
         return Response(bundle(state),mimetype='text/csv; charset=utf-8',headers={'Content-Disposition':'attachment; filename=evidence.csv'})
+    @app.get('/api/work_orders')
+    def work_orders():return jsonify(store.list_work_orders())
+    @app.get('/api/work_orders/<work_order_id>')
+    def work_order_detail(work_order_id):return jsonify(store.get_work_order(work_order_id))
+    @app.post('/api/work_orders/<work_order_id>/dispatch')
+    def work_order_dispatch(work_order_id):
+        data=request.get_json(silent=True) or {}
+        if not isinstance(data.get('version'),int):raise DomainError('VERSION','请提交派单版本')
+        return jsonify(store.dispatch(work_order_id,data['version'],data.get('note','')))
     with app.app_context():
         if not store.history():
             state=run(load('dirty.csv'),{});store.save(state['run_id'],state)
